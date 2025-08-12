@@ -1,121 +1,279 @@
 import script from '../src/script.mjs';
 
-describe('Job Template Script', () => {
-  const mockContext = {
-    env: {
-      ENVIRONMENT: 'test'
+// Simple fetch mock
+let mockFetch;
+
+beforeAll(() => {
+  mockFetch = {
+    _responses: [],
+    _calls: [],
+    mockReturnValueOnce: function(response) {
+      this._responses.push(response);
+      return this;
     },
-    secrets: {
-      API_KEY: 'test-api-key-123456'
-    },
-    outputs: {},
-    partial_results: {},
-    current_step: 'start'
+    mockClear: function() {
+      this._responses = [];
+      this._calls = [];
+    }
   };
 
+  global.fetch = (...args) => {
+    mockFetch._calls.push(args);
+    const response = mockFetch._responses.shift() || { ok: true };
+    return Promise.resolve(response);
+  };
+
+  global.fetch.mockReturnValueOnce = mockFetch.mockReturnValueOnce.bind(mockFetch);
+  global.fetch.mockClear = mockFetch.mockClear.bind(mockFetch);
+
+  // Mock console with simple functions
+  global.console.log = () => {};
+  global.console.error = () => {};
+});
+
+describe('Salesforce Remove from Permission Set', () => {
+  const mockContext = {
+    environment: {
+      SALESFORCE_INSTANCE_URL: 'https://test.salesforce.com'
+    },
+    secrets: {
+      SALESFORCE_ACCESS_TOKEN: 'test-access-token'
+    }
+  };
+
+  beforeEach(() => {
+    mockFetch.mockClear();
+  });
+
   describe('invoke handler', () => {
-    test('should execute successfully with minimal params', async () => {
+    test('should successfully remove user from permission set', async () => {
       const params = {
-        target: 'test-user@example.com',
-        action: 'create'
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001',
+        apiVersion: 'v61.0'
       };
+
+      // Mock Step 1: Find user
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: [{ Id: '005000000000001' }]
+        })
+      });
+
+      // Mock Step 2: Find assignment
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: [{ Id: '0PA000000000001' }]
+        })
+      });
+
+      // Mock Step 3: Delete assignment
+      global.fetch.mockReturnValueOnce({
+        ok: true
+      });
 
       const result = await script.invoke(params, mockContext);
 
       expect(result.status).toBe('success');
-      expect(result.target).toBe('test-user@example.com');
-      expect(result.action).toBe('create');
-      expect(result.status).toBeDefined();
-      expect(result.processed_at).toBeDefined();
-      expect(result.options_processed).toBe(0);
+      expect(result.username).toBe('test@example.com');
+      expect(result.userId).toBe('005000000000001');
+      expect(result.permissionSetId).toBe('0PS000000000001');
+      expect(result.assignmentId).toBe('0PA000000000001');
+      expect(result.removed).toBe(true);
+
+      // Verify API calls
+      expect(mockFetch._calls).toHaveLength(3);
     });
 
-    test('should handle dry run mode', async () => {
+    test('should handle no assignment found (already removed)', async () => {
       const params = {
-        target: 'test-user@example.com',
-        action: 'delete',
-        dry_run: true
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001'
       };
 
-      const result = await script.invoke(params, mockContext);
+      // Mock Step 1: Find user
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: [{ Id: '005000000000001' }]
+        })
+      });
 
-      expect(result.status).toBe('dry_run_completed');
-      expect(result.target).toBe('test-user@example.com');
-      expect(result.action).toBe('delete');
-    });
-
-    test('should process options array', async () => {
-      const params = {
-        target: 'test-group',
-        action: 'update',
-        options: ['force', 'notify', 'audit']
-      };
+      // Mock Step 2: No assignment found
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: []
+        })
+      });
 
       const result = await script.invoke(params, mockContext);
 
       expect(result.status).toBe('success');
-      expect(result.target).toBe('test-group');
-      expect(result.options_processed).toBe(3);
+      expect(result.username).toBe('test@example.com');
+      expect(result.userId).toBe('005000000000001');
+      expect(result.permissionSetId).toBe('0PS000000000001');
+      expect(result.assignmentId).toBe(null);
+      expect(result.removed).toBe(false);
+
+      // Should only make 2 API calls (no delete needed)
+      expect(mockFetch._calls).toHaveLength(2);
     });
 
-    test('should handle context with previous job outputs', async () => {
-      const contextWithOutputs = {
-        ...mockContext,
-        outputs: {
-          'create-user': {
-            user_id: '12345',
-            created_at: '2024-01-15T10:30:00Z'
-          },
-          'assign-groups': {
-            groups_assigned: 3
-          }
-        }
+    test('should handle user not found', async () => {
+      const params = {
+        username: 'nonexistent@example.com',
+        permissionSetId: '0PS000000000001'
+      };
+
+      // Mock Step 1: User not found
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: []
+        })
+      });
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow('User not found: nonexistent@example.com');
+      expect(mockFetch._calls).toHaveLength(1);
+    });
+
+    test('should validate required parameters', async () => {
+      await expect(script.invoke({}, mockContext)).rejects.toThrow('username is required');
+      await expect(script.invoke({ username: 'test@example.com' }, mockContext)).rejects.toThrow('permissionSetId is required');
+    });
+
+    test('should validate required environment variables', async () => {
+      const contextNoEnv = {
+        environment: {},
+        secrets: { SALESFORCE_ACCESS_TOKEN: 'token' }
       };
 
       const params = {
-        target: 'user-12345',
-        action: 'finalize'
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001'
       };
 
-      const result = await script.invoke(params, contextWithOutputs);
+      await expect(script.invoke(params, contextNoEnv)).rejects.toThrow('SALESFORCE_INSTANCE_URL environment variable is required');
+    });
 
-      expect(result.status).toBe('success');
-      expect(result.target).toBe('user-12345');
-      expect(result.status).toBeDefined();
+    test('should validate required secrets', async () => {
+      const contextNoSecrets = {
+        environment: { SALESFORCE_INSTANCE_URL: 'https://test.salesforce.com' },
+        secrets: {}
+      };
+
+      const params = {
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001'
+      };
+
+      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('SALESFORCE_ACCESS_TOKEN secret is required');
+    });
+
+    test('should handle API errors in user query', async () => {
+      const params = {
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001'
+      };
+
+      global.fetch.mockReturnValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request'
+      });
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow('Failed to query user: 400 Bad Request');
+    });
+
+    test('should use default API version', async () => {
+      const params = {
+        username: 'test@example.com',
+        permissionSetId: '0PS000000000001'
+        // No apiVersion specified
+      };
+
+      // Mock Step 1: Find user
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: [{ Id: '005000000000001' }]
+        })
+      });
+
+      // Mock Step 2: No assignment found
+      global.fetch.mockReturnValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          records: []
+        })
+      });
+
+      await script.invoke(params, mockContext);
+
+      // Verify default API version is used in the URL
+      const firstCallUrl = mockFetch._calls[0][0];
+      expect(firstCallUrl).toContain('/services/data/v61.0/');
     });
   });
 
   describe('error handler', () => {
-    test('should throw error by default', async () => {
+    test('should handle retryable errors (429)', async () => {
       const params = {
-        target: 'test-user@example.com',
-        action: 'create',
-        error: {
-          message: 'Something went wrong',
-          code: 'ERROR_CODE'
-        }
+        error: new Error('Rate limited: 429 Too Many Requests')
       };
 
-      await expect(script.error(params, mockContext)).rejects.toThrow('Unable to recover from error: Something went wrong');
+      // Mock setTimeout to resolve immediately for test
+      const originalSetTimeout = global.setTimeout;
+      global.setTimeout = (fn, _ms) => {
+        fn();
+        return 1;
+      };
+
+      const result = await script.error(params, mockContext);
+      expect(result.status).toBe('retry_requested');
+
+      global.setTimeout = originalSetTimeout;
+    });
+
+    test('should handle non-retryable errors (401, 403)', async () => {
+      const error401 = new Error('Unauthorized: 401');
+      const params401 = { error: error401 };
+      await expect(script.error(params401, mockContext)).rejects.toThrow(error401);
+
+      const error403 = new Error('Forbidden: 403');
+      const params403 = { error: error403 };
+      await expect(script.error(params403, mockContext)).rejects.toThrow(error403);
+    });
+
+    test('should default to retryable for other errors', async () => {
+      const params = {
+        error: new Error('Some other error')
+      };
+
+      const result = await script.error(params, mockContext);
+      expect(result.status).toBe('retry_requested');
     });
   });
 
   describe('halt handler', () => {
-    test('should handle graceful shutdown', async () => {
+    test('should handle graceful shutdown with username', async () => {
       const params = {
-        target: 'test-user@example.com',
+        username: 'test@example.com',
         reason: 'timeout'
       };
 
       const result = await script.halt(params, mockContext);
 
       expect(result.status).toBe('halted');
-      expect(result.target).toBe('test-user@example.com');
+      expect(result.username).toBe('test@example.com');
       expect(result.reason).toBe('timeout');
       expect(result.halted_at).toBeDefined();
     });
 
-    test('should handle halt without target', async () => {
+    test('should handle halt without username', async () => {
       const params = {
         reason: 'system_shutdown'
       };
@@ -123,7 +281,7 @@ describe('Job Template Script', () => {
       const result = await script.halt(params, mockContext);
 
       expect(result.status).toBe('halted');
-      expect(result.target).toBe('unknown');
+      expect(result.username).toBe('unknown');
       expect(result.reason).toBe('system_shutdown');
     });
   });

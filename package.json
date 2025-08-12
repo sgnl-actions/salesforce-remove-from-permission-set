@@ -1,7 +1,7 @@
 {
-  "name": "@sgnl/job-template",
+  "name": "@sgnl-actions/salesforce-remove-from-permission-set",
   "version": "1.0.0",
-  "description": "Template for SGNL JavaScript jobs",
+  "description": "Remove a user from a permission set in Salesforce",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -15,7 +15,7 @@
     "validate": "node scripts/validate-metadata.js",
     "dev": "node scripts/dev-runner.js"
   },
-  "keywords": ["sgnl", "job", "template", "identity", "security"],
+  "keywords": ["sgnl", "salesforce", "permission-set", "identity", "security"],
   "author": "SGNL Engineering",
   "license": "MIT",
   "dependencies": {

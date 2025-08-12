@@ -1,37 +1,41 @@
-name: job-template
-description: Template for SGNL JavaScript jobs - replace with your job description
+name: salesforce-remove-from-permission-set
+description: Remove a user from a permission set in Salesforce
 
 # Input parameters for web form generation
 inputs:
-  target:
+  username:
     type: text
-    description: Target resource identifier (e.g., user email, group ID)
+    description: Salesforce username (email) of the user to remove from permission set
     required: true
     validation:
       min: 1
-      max: 100
+      max: 255
 
-  action:
+  permissionSetId:
     type: text
-    description: Action to perform on the target resource
+    description: The ID of the permission set to remove the user from
     required: true
     validation:
-      min: 1
-      max: 50
+      min: 15
+      max: 18
 
-  options:
-    type: array
-    description: Additional options for the operation
+  apiVersion:
+    type: text
+    description: Salesforce API version to use
     required: false
-    item_type: text
+    default: "v61.0"
     validation:
-      max: 10
+      pattern: "^v\\d+\\.\\d+$"
 
-  dry_run:
-    type: boolean
-    description: Preview changes without executing them
-    required: false
-    default: false
+# Required secrets
+secrets:
+  SALESFORCE_ACCESS_TOKEN:
+    description: Salesforce access token for API authentication
+
+# Required environment variables  
+environment:
+  SALESFORCE_INSTANCE_URL:
+    description: The base URL of your Salesforce instance (e.g., https://mycompany.salesforce.com)
 
 # Expected output structure
 outputs:
@@ -39,10 +43,22 @@ outputs:
     type: text
     description: Operation result (success, failed, recovered, etc.)
 
-  target:
+  username:
     type: text
-    description: The target resource that was processed
+    description: The username that was processed
 
-  processed_at:
-    type: datetime
-    description: When the operation completed (ISO 8601)
+  userId:
+    type: text
+    description: The Salesforce User ID
+
+  permissionSetId:
+    type: text
+    description: The permission set ID
+
+  assignmentId:
+    type: text
+    description: The permission set assignment ID that was removed (if found)
+
+  removed:
+    type: boolean
+    description: Whether the permission set assignment was actually removed

@@ -1,185 +1,234 @@
-# SGNL Job Template
+# Salesforce Remove from Permission Set
 
-This repository provides a template for creating JavaScript jobs for the SGNL Job Service.
+This action removes a user from a permission set in Salesforce using a three-step process to ensure safe and reliable operation.
 
-## Quick Start
+## Overview
 
-1. **Use this template** to create a new repository
-2. **Clone** your new repository locally
-3. **Install dependencies**: `npm install`  
-4. **Modify** `src/script.mjs` with your job logic
-5. **Update** `metadata.yaml` with your job schema
-6. **Test locally**: `npm run dev`
-7. **Run tests**: `npm test`
-8. **Build**: `npm run build`
-9. **Release**: Create a git tag and push
+The action performs these steps:
+1. **Find User**: Query Salesforce to find the user by username
+2. **Find Assignment**: Check if the user is currently assigned to the permission set
+3. **Remove Assignment**: Delete the permission set assignment (if it exists)
+
+The action handles the case where no assignment exists gracefully, treating it as a successful operation since the desired state (user not in permission set) is already achieved.
+
+## Prerequisites
+
+- Salesforce organization with API access enabled
+- Valid Salesforce access token with permissions to:
+  - Read User records
+  - Read PermissionSetAssignment records  
+  - Delete PermissionSetAssignment records
+- Salesforce instance URL
+
+## Configuration
+
+### Required Secrets
+
+- `SALESFORCE_ACCESS_TOKEN`: Valid Salesforce access token (OAuth or session-based)
+
+### Required Environment Variables
+
+- `SALESFORCE_INSTANCE_URL`: Your Salesforce instance URL (e.g., `https://mycompany.salesforce.com`)
+
+### Input Parameters
+
+- `username` (required): Salesforce username (email) of the user to remove from the permission set
+- `permissionSetId` (required): The 15 or 18-character ID of the permission set
+- `apiVersion` (optional): Salesforce API version to use (defaults to `v61.0`)
+
+### Output Schema
+
+```json
+{
+  "status": "success",
+  "username": "user@example.com",
+  "userId": "005000000000001",
+  "permissionSetId": "0PS000000000001", 
+  "assignmentId": "0PA000000000001",
+  "removed": true
+}
+```
+
+- `status`: Operation result (`success`, `failed`, `halted`)
+- `username`: The username that was processed
+- `userId`: The Salesforce User ID that was found
+- `permissionSetId`: The permission set ID from input
+- `assignmentId`: The assignment ID that was removed (null if no assignment existed)
+- `removed`: Boolean indicating whether an assignment was actually removed
+
+## Usage Examples
+
+### Basic Usage
+
+```json
+{
+  "username": "john.doe@company.com",
+  "permissionSetId": "0PS000000000001"
+}
+```
+
+### With Custom API Version
+
+```json
+{
+  "username": "john.doe@company.com", 
+  "permissionSetId": "0PS000000000001",
+  "apiVersion": "v60.0"
+}
+```
+
+## Error Handling
+
+The action includes comprehensive error handling:
+
+### Input Validation
+- Validates required parameters (`username`, `permissionSetId`)
+- Validates required configuration (`SALESFORCE_ACCESS_TOKEN`, `SALESFORCE_INSTANCE_URL`)
+
+### API Error Handling
+- **User Not Found**: Throws descriptive error if username doesn't exist
+- **Assignment Not Found**: Treated as success (already in desired state)
+- **API Errors**: Descriptive errors for failed Salesforce API calls
+- **Network Errors**: Automatic retry for rate limits (429) and server errors (502, 503, 504)
+- **Auth Errors**: No retry for authentication/authorization failures (401, 403)
+
+### Retryable vs Fatal Errors
+
+**Retryable (with exponential backoff):**
+- Rate limiting (429)
+- Server errors (502, 503, 504)
+- Network timeouts
+
+**Fatal (no retry):**
+- Authentication errors (401, 403)
+- Invalid user data
+- Malformed requests
+
+## Security Considerations
+
+### URL Encoding
+The action properly URL-encodes usernames in SOQL queries to prevent injection attacks and handle special characters safely.
+
+### Access Token Security
+- Access tokens are accessed from secure secrets storage
+- Tokens are never logged or exposed in outputs
+- Bearer token format is used for API authentication
+
+### Data Privacy
+- Only necessary user data is queried (User ID only)
+- No sensitive user information is logged or returned
+- Assignment IDs are included for audit purposes
 
 ## Development
 
 ### Local Testing
 
 ```bash
-# Run the script locally with mock data
-npm run dev
+# Install dependencies
+npm install
 
 # Run unit tests
 npm test
 
-# Watch mode for development
-npm run test:watch
-npm run build:watch
+# Run with coverage
+npm run test:coverage
 
-# Validate metadata
-npm run validate
+# Test locally with sample data
+npm run dev -- --params '{"username":"test@example.com","permissionSetId":"0PS000000000001"}'
 
 # Lint code
 npm run lint
-npm run lint:fix
 ```
 
-### File Structure
+### Test Coverage
 
-- `src/script.mjs` - Main job implementation (⚠️ **Edit this!**)
-- `metadata.yaml` - Job schema and configuration (⚠️ **Edit this!**)
-- `tests/script.test.js` - Unit tests
-- `dist/index.js` - Built script (generated by `npm run build`)
-- `scripts/` - Development utilities
+The action includes comprehensive test coverage for:
+- Successful permission set removal
+- No assignment found scenario (already removed)
+- User not found errors
+- URL encoding edge cases
+- API error responses
+- Retry logic for various error types
+- Input validation
+- Configuration validation
 
-## Implementation Checklist
+## API Reference
 
-### Required Changes
+### Salesforce APIs Used
 
-- [ ] **Update job name** and description in `metadata.yaml`
-- [ ] **Define input parameters** in `metadata.yaml` 
-- [ ] **Define output schema** in `metadata.yaml`
-- [ ] **Implement `invoke` handler** in `src/script.mjs`
-- [ ] **Update test mock data** in `tests/script.test.js`
-- [ ] **Update README** with job-specific documentation
+1. **SOQL Query (User)**: `GET /services/data/{version}/query`
+   - Query: `SELECT Id FROM User WHERE Username='{username}' ORDER BY Id ASC`
+   - Used to find the user by username
 
-### Optional Enhancements
+2. **SOQL Query (Assignment)**: `GET /services/data/{version}/query` 
+   - Query: `SELECT Id FROM PermissionSetAssignment WHERE AssigneeId='{userId}' AND PermissionSetId='{permissionSetId}'`
+   - Used to find existing permission set assignment
 
-- [ ] Implement `error` handler for error recovery
-- [ ] Implement `halt` handler for graceful shutdown
-- [ ] Add additional test cases
-- [ ] Customize development runner in `scripts/dev-runner.js`
+3. **Delete Assignment**: `DELETE /services/data/{version}/sobjects/PermissionSetAssignment/{assignmentId}`
+   - Used to remove the permission set assignment
 
-## Event Handlers
+## Troubleshooting
 
-Your script must export a default object with these handlers:
+### Common Issues
 
-### `invoke` (Required)
-Main execution logic for your job.
+**"User not found" Error**
+- Verify the username is correct and exists in Salesforce
+- Ensure the username is the full email address
+- Check that the access token has permission to read User records
 
-```javascript
-invoke: async (params, context) => {
-  // Your job logic here
-  return {
-    status: 'success',
-    // ... other outputs
-  };
-}
+**"Failed to query permission set assignment" Error**  
+- Verify the permission set ID is correct (15 or 18 characters)
+- Ensure the access token has permission to read PermissionSetAssignment records
+- Check that the permission set exists in the organization
+
+**"Failed to delete permission set assignment" Error**
+- Ensure the access token has permission to delete PermissionSetAssignment records
+- Verify the user has sufficient privileges to remove permission set assignments
+- Check for any Salesforce validation rules that might block the deletion
+
+**Rate Limiting**
+- The action automatically handles rate limits with exponential backoff
+- If rate limiting persists, consider spacing out multiple operations
+
+### Debugging
+
+Enable debug logging by setting the environment variable:
+```bash
+LOG_LEVEL=debug
 ```
 
-### `error` (Optional)
-Error recovery logic when `invoke` fails.
-
-```javascript
-error: async (params, context) => {
-  // params.error contains the original error
-  // Attempt recovery or cleanup
-  return {
-    status: 'recovered',
-    // ... recovery results
-  };
-}
-```
-
-### `halt` (Optional)  
-Graceful shutdown when job is cancelled or times out.
-
-```javascript
-halt: async (params, context) => {
-  // params.reason contains halt reason
-  // Clean up resources, save partial progress
-  return {
-    status: 'halted',
-    cleanup_completed: true
-  };
-}
-```
-
-## Context Object
-
-The `context` parameter provides access to:
-
-```javascript
-{
-  env: {
-    ENVIRONMENT: "production",
-    // ... other environment variables
-  },
-  secrets: {
-    API_KEY: "secret-key",
-    // ... other secrets
-  },
-  outputs: {
-    "previous-job-step": {
-      // ... outputs from previous jobs in workflow
-    }
-  }
-}
-```
-
-## Testing
-
-### Unit Tests
-
-Tests are in `tests/script.test.js`. Update the mock data to match your job's inputs:
-
-```javascript
-const params = {
-  target: 'your-target',
-  action: 'your-action'
-  // ... other inputs
-};
-```
-
-### Local Development
-
-Use `npm run dev` to test your script locally with mock data. Update `scripts/dev-runner.js` to customize the test parameters.
+This will provide detailed information about:
+- API requests and responses
+- Query construction and parameter encoding
+- Error details and retry attempts
 
 ## Deployment
 
-1. **Ensure tests pass**: `npm test`
-2. **Validate metadata**: `npm run validate`  
-3. **Build distribution**: `npm run build`
-4. **Create git tag**: `git tag v1.0.0`
+1. **Test thoroughly**: `npm test && npm run test:coverage`
+2. **Validate metadata**: `npm run validate`
+3. **Build production bundle**: `npm run build`  
+4. **Create release**: `git tag -a v1.0.0 -m "Release v1.0.0"`
 5. **Push to GitHub**: `git push origin v1.0.0`
 
-## Usage in SGNL
+## Integration with SGNL
 
-Reference your job in a JobSpec:
+Reference this action in a workflow:
 
 ```json
 {
-  "id": "my-job-123",
-  "type": "nodejs-20",
+  "id": "remove-salesforce-permission",
+  "type": "nodejs-22",
   "script": {
-    "repository": "github.com/your-org/your-job-repo",
+    "repository": "github.com/sgnl-actions/salesforce-remove-from-permission-set",
     "version": "v1.0.0",
     "type": "nodejs"
   },
   "script_inputs": {
-    "target": "user@example.com",
-    "action": "create"
+    "username": "john.doe@company.com",
+    "permissionSetId": "0PS000000000001"
   },
   "environment": {
-    "ENVIRONMENT": "production"
+    "SALESFORCE_INSTANCE_URL": "https://mycompany.salesforce.com"
   }
 }
 ```
-
-## Support
-
-- [Job Development Guide](https://github.com/SGNL-ai/job_service/blob/main/docs/JAVASCRIPT_JOB_DEVELOPMENT.md)
-- [SGNL Job Service](https://github.com/SGNL-ai/job_service)

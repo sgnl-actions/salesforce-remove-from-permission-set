@@ -24,7 +24,7 @@ The action handles the case where no assignment exists gracefully, treating it a
 
 ### Required Secrets
 
-- `SALESFORCE_ACCESS_TOKEN`: Valid Salesforce access token (OAuth or session-based)
+- `BEARER_AUTH_TOKEN`: Valid Salesforce access token (OAuth or session-based)
 
 ### Required Environment Variables
 

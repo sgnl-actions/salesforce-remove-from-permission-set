@@ -88,6 +88,7 @@ var script = {
    * @param {string} params.permissionSetId - Permission set ID
    * @param {string} params.apiVersion - API version (optional, defaults to v61.0)
    * @param {Object} context - Execution context with env, secrets, outputs
+   * @param {string} context.secrets.BEARER_AUTH_TOKEN - Bearer token for Salesforce API authentication
    * @returns {Object} Job results
    */
   invoke: async (params, context) => {
@@ -104,14 +105,14 @@ var script = {
 
     // Get configuration from context
     const instanceUrl = context.environment.SALESFORCE_INSTANCE_URL;
-    const accessToken = context.secrets.SALESFORCE_ACCESS_TOKEN;
+    const accessToken = context.secrets.BEARER_AUTH_TOKEN;
 
     if (!instanceUrl) {
       throw new Error('SALESFORCE_INSTANCE_URL environment variable is required');
     }
 
     if (!accessToken) {
-      throw new Error('SALESFORCE_ACCESS_TOKEN secret is required');
+      throw new Error('BEARER_AUTH_TOKEN secret is required');
     }
 
     console.log(`Removing user ${username} from permission set ${permissionSetId}`);

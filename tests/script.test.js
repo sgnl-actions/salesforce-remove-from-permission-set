@@ -37,7 +37,7 @@ describe('Salesforce Remove from Permission Set', () => {
       SALESFORCE_INSTANCE_URL: 'https://test.salesforce.com'
     },
     secrets: {
-      SALESFORCE_ACCESS_TOKEN: 'test-access-token'
+      BEARER_AUTH_TOKEN: 'test-access-token'
     }
   };
 
@@ -148,7 +148,7 @@ describe('Salesforce Remove from Permission Set', () => {
     test('should validate required environment variables', async () => {
       const contextNoEnv = {
         environment: {},
-        secrets: { SALESFORCE_ACCESS_TOKEN: 'token' }
+        secrets: { BEARER_AUTH_TOKEN: 'token' }
       };
 
       const params = {
@@ -170,7 +170,7 @@ describe('Salesforce Remove from Permission Set', () => {
         permissionSetId: '0PS000000000001'
       };
 
-      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('SALESFORCE_ACCESS_TOKEN secret is required');
+      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('BEARER_AUTH_TOKEN secret is required');
     });
 
     test('should handle API errors in user query', async () => {

@@ -34,7 +34,7 @@ beforeAll(() => {
 describe('Salesforce Remove from Permission Set', () => {
   const mockContext = {
     environment: {
-      SALESFORCE_INSTANCE_URL: 'https://test.salesforce.com'
+      ADDRESS: 'https://test.salesforce.com'
     },
     secrets: {
       BEARER_AUTH_TOKEN: 'test-access-token'
@@ -49,8 +49,7 @@ describe('Salesforce Remove from Permission Set', () => {
     test('should successfully remove user from permission set', async () => {
       const params = {
         username: 'test@example.com',
-        permissionSetId: '0PS000000000001',
-        apiVersion: 'v61.0'
+        permissionSetId: '0PS000000000001'
       };
 
       // Mock Step 1: Find user
@@ -156,12 +155,12 @@ describe('Salesforce Remove from Permission Set', () => {
         permissionSetId: '0PS000000000001'
       };
 
-      await expect(script.invoke(params, contextNoEnv)).rejects.toThrow('SALESFORCE_INSTANCE_URL environment variable is required');
+      await expect(script.invoke(params, contextNoEnv)).rejects.toThrow('No URL specified. Provide address parameter or ADDRESS environment variable');
     });
 
     test('should validate required secrets', async () => {
       const contextNoSecrets = {
-        environment: { SALESFORCE_INSTANCE_URL: 'https://test.salesforce.com' },
+        environment: { ADDRESS: 'https://test.salesforce.com' },
         secrets: {}
       };
 
@@ -170,7 +169,7 @@ describe('Salesforce Remove from Permission Set', () => {
         permissionSetId: '0PS000000000001'
       };
 
-      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('BEARER_AUTH_TOKEN secret is required');
+      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('No authentication configured');
     });
 
     test('should handle API errors in user query', async () => {
@@ -187,74 +186,14 @@ describe('Salesforce Remove from Permission Set', () => {
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow('Failed to query user: 400 Bad Request');
     });
-
-    test('should use default API version', async () => {
-      const params = {
-        username: 'test@example.com',
-        permissionSetId: '0PS000000000001'
-        // No apiVersion specified
-      };
-
-      // Mock Step 1: Find user
-      global.fetch.mockReturnValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          records: [{ Id: '005000000000001' }]
-        })
-      });
-
-      // Mock Step 2: No assignment found
-      global.fetch.mockReturnValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          records: []
-        })
-      });
-
-      await script.invoke(params, mockContext);
-
-      // Verify default API version is used in the URL
-      const firstCallUrl = mockFetch._calls[0][0];
-      expect(firstCallUrl).toContain('/services/data/v61.0/');
-    });
   });
 
   describe('error handler', () => {
-    test('should handle retryable errors (429)', async () => {
-      const params = {
-        error: new Error('Rate limited: 429 Too Many Requests')
-      };
+    test('should rethrow errors', async () => {
+      const testError = new Error('Test error');
+      const params = { error: testError };
 
-      // Mock setTimeout to resolve immediately for test
-      const originalSetTimeout = global.setTimeout;
-      global.setTimeout = (fn, _ms) => {
-        fn();
-        return 1;
-      };
-
-      const result = await script.error(params, mockContext);
-      expect(result.status).toBe('retry_requested');
-
-      global.setTimeout = originalSetTimeout;
-    });
-
-    test('should handle non-retryable errors (401, 403)', async () => {
-      const error401 = new Error('Unauthorized: 401');
-      const params401 = { error: error401 };
-      await expect(script.error(params401, mockContext)).rejects.toThrow(error401);
-
-      const error403 = new Error('Forbidden: 403');
-      const params403 = { error: error403 };
-      await expect(script.error(params403, mockContext)).rejects.toThrow(error403);
-    });
-
-    test('should default to retryable for other errors', async () => {
-      const params = {
-        error: new Error('Some other error')
-      };
-
-      const result = await script.error(params, mockContext);
-      expect(result.status).toBe('retry_requested');
+      await expect(script.error(params, mockContext)).rejects.toThrow(testError);
     });
   });
 

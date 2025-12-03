@@ -195,18 +195,6 @@ The action includes comprehensive test coverage for:
 - The SGNL framework handles rate limits based on the configured retry policy
 - If rate limiting persists, consider spacing out multiple operations or adjusting retry settings
 
-### Debugging
-
-Enable debug logging by setting the environment variable:
-```bash
-LOG_LEVEL=debug
-```
-
-This will provide detailed information about:
-- API requests and responses
-- Query construction and parameter encoding
-- Error details and retry attempts
-
 ## Deployment
 
 1. **Test thoroughly**: `npm test && npm run test:coverage`

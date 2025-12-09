@@ -14,27 +14,47 @@ The action handles the case where no assignment exists gracefully, treating it a
 ## Prerequisites
 
 - Salesforce organization with API access enabled
-- Valid Salesforce access token with permissions to:
+- Valid authentication with permissions to:
   - Read User records
-  - Read PermissionSetAssignment records  
+  - Read PermissionSetAssignment records
   - Delete PermissionSetAssignment records
 - Salesforce instance URL
 
 ## Configuration
 
-### Required Secrets
+### Authentication
 
-- `SALESFORCE_ACCESS_TOKEN`: Valid Salesforce access token (OAuth or session-based)
+This action supports multiple authentication methods. Configure one of the following:
+
+#### Bearer Token
+- **`BEARER_AUTH_TOKEN`** (secret) - A valid Salesforce OAuth access token
+
+#### Basic Authentication
+- **`BASIC_USERNAME`** (secret) - Username for basic auth
+- **`BASIC_PASSWORD`** (secret) - Password for basic auth
+
+#### OAuth2 Client Credentials
+- **`OAUTH2_CLIENT_CREDENTIALS_CLIENT_ID`** (environment) - OAuth2 client ID
+- **`OAUTH2_CLIENT_CREDENTIALS_CLIENT_SECRET`** (secret) - OAuth2 client secret
+- **`OAUTH2_CLIENT_CREDENTIALS_TOKEN_URL`** (environment) - Token endpoint URL
+- **`OAUTH2_CLIENT_CREDENTIALS_SCOPE`** (environment) - OAuth2 scope (optional)
+- **`OAUTH2_CLIENT_CREDENTIALS_AUDIENCE`** (environment) - OAuth2 audience (optional)
+- **`OAUTH2_CLIENT_CREDENTIALS_AUTH_STYLE`** (environment) - Auth style: `in_header` or `in_body`
+
+#### OAuth2 Authorization Code
+- **`OAUTH2_AUTHORIZATION_CODE_ACCESS_TOKEN`** (secret) - OAuth2 access token
 
 ### Required Environment Variables
 
-- `SALESFORCE_INSTANCE_URL`: Your Salesforce instance URL (e.g., `https://mycompany.salesforce.com`)
+- **`ADDRESS`** - Your Salesforce instance URL (e.g., `https://mycompany.salesforce.com`)
 
 ### Input Parameters
 
-- `username` (required): Salesforce username (email) of the user to remove from the permission set
-- `permissionSetId` (required): The 15 or 18-character ID of the permission set
-- `apiVersion` (optional): Salesforce API version to use (defaults to `v61.0`)
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `username` | string | Yes | Salesforce username (email) of the user to remove from the permission set |
+| `permissionSetId` | string | Yes | The 15 or 18-character ID of the permission set |
+| `address` | string | No | Salesforce instance URL (overrides `ADDRESS` environment variable) |
 
 ### Output Schema
 
@@ -67,52 +87,33 @@ The action handles the case where no assignment exists gracefully, treating it a
 }
 ```
 
-### With Custom API Version
-
-```json
-{
-  "username": "john.doe@company.com", 
-  "permissionSetId": "0PS000000000001",
-  "apiVersion": "v60.0"
-}
-```
-
 ## Error Handling
 
-The action includes comprehensive error handling:
+The action implements comprehensive error handling:
+
+### Error Behavior
+All errors are re-thrown to allow the SGNL framework to handle retry logic based on the configured retry policy.
 
 ### Input Validation
 - Validates required parameters (`username`, `permissionSetId`)
-- Validates required configuration (`SALESFORCE_ACCESS_TOKEN`, `SALESFORCE_INSTANCE_URL`)
+- Validates required authentication configuration
+- Validates required `ADDRESS` environment variable
 
 ### API Error Handling
 - **User Not Found**: Throws descriptive error if username doesn't exist
 - **Assignment Not Found**: Treated as success (already in desired state)
-- **API Errors**: Descriptive errors for failed Salesforce API calls
-- **Network Errors**: Automatic retry for rate limits (429) and server errors (502, 503, 504)
-- **Auth Errors**: No retry for authentication/authorization failures (401, 403)
-
-### Retryable vs Fatal Errors
-
-**Retryable (with exponential backoff):**
-- Rate limiting (429)
-- Server errors (502, 503, 504)
-- Network timeouts
-
-**Fatal (no retry):**
-- Authentication errors (401, 403)
-- Invalid user data
-- Malformed requests
+- **API Errors**: Descriptive errors for failed Salesforce API calls with status codes
+- **Authentication Errors**: Throws error when credentials are invalid or missing
 
 ## Security Considerations
 
 ### URL Encoding
 The action properly URL-encodes usernames in SOQL queries to prevent injection attacks and handle special characters safely.
 
-### Access Token Security
-- Access tokens are accessed from secure secrets storage
-- Tokens are never logged or exposed in outputs
-- Bearer token format is used for API authentication
+### Credential Security
+- Credentials are handled securely through the authentication framework
+- Credentials are never logged or exposed in outputs
+- All authentication methods use secure transmission
 
 ### Data Privacy
 - Only necessary user data is queried (User ID only)
@@ -148,7 +149,7 @@ The action includes comprehensive test coverage for:
 - User not found errors
 - URL encoding edge cases
 - API error responses
-- Retry logic for various error types
+- Error handler behavior
 - Input validation
 - Configuration validation
 
@@ -156,15 +157,15 @@ The action includes comprehensive test coverage for:
 
 ### Salesforce APIs Used
 
-1. **SOQL Query (User)**: `GET /services/data/{version}/query`
+1. **SOQL Query (User)**: `GET /services/data/v61.0/query`
    - Query: `SELECT Id FROM User WHERE Username='{username}' ORDER BY Id ASC`
    - Used to find the user by username
 
-2. **SOQL Query (Assignment)**: `GET /services/data/{version}/query` 
+2. **SOQL Query (Assignment)**: `GET /services/data/v61.0/query`
    - Query: `SELECT Id FROM PermissionSetAssignment WHERE AssigneeId='{userId}' AND PermissionSetId='{permissionSetId}'`
    - Used to find existing permission set assignment
 
-3. **Delete Assignment**: `DELETE /services/data/{version}/sobjects/PermissionSetAssignment/{assignmentId}`
+3. **Delete Assignment**: `DELETE /services/data/v61.0/sobjects/PermissionSetAssignment/{assignmentId}`
    - Used to remove the permission set assignment
 
 ## Troubleshooting
@@ -174,33 +175,25 @@ The action includes comprehensive test coverage for:
 **"User not found" Error**
 - Verify the username is correct and exists in Salesforce
 - Ensure the username is the full email address
-- Check that the access token has permission to read User records
+- Check that your credentials have permission to read User records
 
-**"Failed to query permission set assignment" Error**  
+**"Failed to query permission set assignment" Error**
 - Verify the permission set ID is correct (15 or 18 characters)
-- Ensure the access token has permission to read PermissionSetAssignment records
+- Ensure your credentials have permission to read PermissionSetAssignment records
 - Check that the permission set exists in the organization
 
 **"Failed to delete permission set assignment" Error**
-- Ensure the access token has permission to delete PermissionSetAssignment records
-- Verify the user has sufficient privileges to remove permission set assignments
+- Ensure your credentials have permission to delete PermissionSetAssignment records
+- Verify you have sufficient privileges to remove permission set assignments
 - Check for any Salesforce validation rules that might block the deletion
 
+**"No authentication configured" Error**
+- Ensure you have configured one of the supported authentication methods
+- Verify that the credentials are properly set in secrets and environment variables
+
 **Rate Limiting**
-- The action automatically handles rate limits with exponential backoff
-- If rate limiting persists, consider spacing out multiple operations
-
-### Debugging
-
-Enable debug logging by setting the environment variable:
-```bash
-LOG_LEVEL=debug
-```
-
-This will provide detailed information about:
-- API requests and responses
-- Query construction and parameter encoding
-- Error details and retry attempts
+- The SGNL framework handles rate limits based on the configured retry policy
+- If rate limiting persists, consider spacing out multiple operations or adjusting retry settings
 
 ## Deployment
 
@@ -228,7 +221,7 @@ Reference this action in a workflow:
     "permissionSetId": "0PS000000000001"
   },
   "environment": {
-    "SALESFORCE_INSTANCE_URL": "https://mycompany.salesforce.com"
+    "ADDRESS": "https://mycompany.salesforce.com"
   }
 }
 ```

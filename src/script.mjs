@@ -7,23 +7,24 @@
  * 3. Delete the permission set assignment
  */
 
+import { getBaseUrl, getAuthorizationHeader } from '@sgnl-actions/utils';
+
 /**
  * Performs a SOQL query to find a user by username
  * @param {string} username - The username to search for
- * @param {string} instanceUrl - Salesforce instance URL
- * @param {string} accessToken - Salesforce access token
- * @param {string} apiVersion - API version to use
+ * @param {string} baseUrl - Salesforce instance URL
+ * @param {string} authHeader - Authorization header value (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function findUserByUsername(username, instanceUrl, accessToken, apiVersion) {
+async function findUserByUsername(username, baseUrl, authHeader) {
   const encodedUsername = encodeURIComponent(username);
   const query = `SELECT+Id+FROM+User+WHERE+Username='${encodedUsername}'+ORDER+BY+Id+ASC`;
-  const url = new URL(`/services/data/${apiVersion}/query?q=${query}`, instanceUrl);
+  const url = `${baseUrl}/services/data/v61.0/query?q=${query}`;
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': authHeader,
       'Accept': 'application/json'
     }
   });
@@ -35,19 +36,18 @@ async function findUserByUsername(username, instanceUrl, accessToken, apiVersion
  * Finds an existing permission set assignment for a user and permission set
  * @param {string} userId - The user ID
  * @param {string} permissionSetId - The permission set ID
- * @param {string} instanceUrl - Salesforce instance URL
- * @param {string} accessToken - Salesforce access token
- * @param {string} apiVersion - API version to use
+ * @param {string} baseUrl - Salesforce instance URL
+ * @param {string} authHeader - Authorization header value (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function findPermissionSetAssignment(userId, permissionSetId, instanceUrl, accessToken, apiVersion) {
+async function findPermissionSetAssignment(userId, permissionSetId, baseUrl, authHeader) {
   const query = `SELECT+Id+FROM+PermissionSetAssignment+WHERE+AssigneeId='${userId}'+AND+PermissionSetId='${permissionSetId}'`;
-  const url = new URL(`/services/data/${apiVersion}/query?q=${query}`, instanceUrl);
+  const url = `${baseUrl}/services/data/v61.0/query?q=${query}`;
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': authHeader,
       'Accept': 'application/json'
     }
   });
@@ -58,18 +58,17 @@ async function findPermissionSetAssignment(userId, permissionSetId, instanceUrl,
 /**
  * Deletes a permission set assignment
  * @param {string} assignmentId - The assignment ID to delete
- * @param {string} instanceUrl - Salesforce instance URL
- * @param {string} accessToken - Salesforce access token
- * @param {string} apiVersion - API version to use
+ * @param {string} baseUrl - Salesforce instance URL
+ * @param {string} authHeader - Authorization header value (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function deletePermissionSetAssignment(assignmentId, instanceUrl, accessToken, apiVersion) {
-  const url = new URL(`/services/data/${apiVersion}/sobjects/PermissionSetAssignment/${assignmentId}`, instanceUrl);
+async function deletePermissionSetAssignment(assignmentId, baseUrl, authHeader) {
+  const url = `${baseUrl}/services/data/v61.0/sobjects/PermissionSetAssignment/${assignmentId}`;
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': authHeader,
       'Accept': 'application/json'
     }
   });
@@ -83,12 +82,29 @@ export default {
    * @param {Object} params - Job input parameters
    * @param {string} params.username - Salesforce username to remove from permission set
    * @param {string} params.permissionSetId - Permission set ID
-   * @param {string} params.apiVersion - API version (optional, defaults to v61.0)
-   * @param {Object} context - Execution context with env, secrets, outputs
-   * @returns {Object} Job results
+   * @param {string} params.address - Optional Salesforce API base URL
+   * @param {Object} context - Execution context with secrets and environment
+   * @param {string} context.environment.ADDRESS - Default Salesforce API base URL
+   *
+   * The configured auth type will determine which of the following environment variables and secrets are available
+   * @param {string} context.secrets.BEARER_AUTH_TOKEN
+   *
+   * @param {string} context.secrets.BASIC_USERNAME
+   * @param {string} context.secrets.BASIC_PASSWORD
+   *
+   * @param {string} context.secrets.OAUTH2_CLIENT_CREDENTIALS_CLIENT_SECRET
+   * @param {string} context.environment.OAUTH2_CLIENT_CREDENTIALS_AUDIENCE
+   * @param {string} context.environment.OAUTH2_CLIENT_CREDENTIALS_AUTH_STYLE
+   * @param {string} context.environment.OAUTH2_CLIENT_CREDENTIALS_CLIENT_ID
+   * @param {string} context.environment.OAUTH2_CLIENT_CREDENTIALS_SCOPE
+   * @param {string} context.environment.OAUTH2_CLIENT_CREDENTIALS_TOKEN_URL
+   *
+   * @param {string} context.secrets.OAUTH2_AUTHORIZATION_CODE_ACCESS_TOKEN
+   *
+   * @returns {Promise<Object>} Action result
    */
   invoke: async (params, context) => {
-    const { username, permissionSetId, apiVersion = 'v61.0' } = params;
+    const { username, permissionSetId } = params;
 
     // Validate required parameters
     if (!username) {
@@ -99,23 +115,17 @@ export default {
       throw new Error('permissionSetId is required');
     }
 
-    // Get configuration from context
-    const instanceUrl = context.environment.SALESFORCE_INSTANCE_URL;
-    const accessToken = context.secrets.SALESFORCE_ACCESS_TOKEN;
+    // Get base URL using utility function
+    const baseUrl = getBaseUrl(params, context);
 
-    if (!instanceUrl) {
-      throw new Error('SALESFORCE_INSTANCE_URL environment variable is required');
-    }
-
-    if (!accessToken) {
-      throw new Error('SALESFORCE_ACCESS_TOKEN secret is required');
-    }
+    // Get authorization header
+    const authHeader = await getAuthorizationHeader(context);
 
     console.log(`Removing user ${username} from permission set ${permissionSetId}`);
 
     // Step 1: Find user by username
     console.log(`Step 1: Finding user by username: ${username}`);
-    const userResponse = await findUserByUsername(username, instanceUrl, accessToken, apiVersion);
+    const userResponse = await findUserByUsername(username, baseUrl, authHeader);
 
     if (!userResponse.ok) {
       throw new Error(`Failed to query user: ${userResponse.status} ${userResponse.statusText}`);
@@ -131,7 +141,7 @@ export default {
 
     // Step 2: Find existing permission set assignment
     console.log(`Step 2: Finding permission set assignment for user ${userId} and permission set ${permissionSetId}`);
-    const assignmentResponse = await findPermissionSetAssignment(userId, permissionSetId, instanceUrl, accessToken, apiVersion);
+    const assignmentResponse = await findPermissionSetAssignment(userId, permissionSetId, baseUrl, authHeader);
 
     if (!assignmentResponse.ok) {
       throw new Error(`Failed to query permission set assignment: ${assignmentResponse.status} ${assignmentResponse.statusText}`);
@@ -156,7 +166,7 @@ export default {
 
     // Step 3: Delete the permission set assignment
     console.log(`Step 3: Deleting permission set assignment ${assignmentId}`);
-    const deleteResponse = await deletePermissionSetAssignment(assignmentId, instanceUrl, accessToken, apiVersion);
+    const deleteResponse = await deletePermissionSetAssignment(assignmentId, baseUrl, authHeader);
 
     if (!deleteResponse.ok) {
       throw new Error(`Failed to delete permission set assignment: ${deleteResponse.status} ${deleteResponse.statusText}`);
@@ -175,32 +185,14 @@ export default {
   },
 
   /**
-   * Error recovery handler
+   * Error handler - re-throws errors to let framework handle retry logic
    * @param {Object} params - Original params plus error information
    * @param {Object} context - Execution context
    * @returns {Object} Recovery results
    */
   error: async (params, _context) => {
     const { error } = params;
-    console.error(`Error removing user from permission set: ${error.message}`);
-
-    // Check for retryable errors
-    if (error.message.includes('429') || error.message.includes('502') ||
-        error.message.includes('503') || error.message.includes('504')) {
-      // Rate limit or server errors - wait and retry
-      console.log('Retryable error detected, waiting before retry...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      return { status: 'retry_requested' };
-    }
-
-    // Non-retryable errors
-    if (error.message.includes('401') || error.message.includes('403')) {
-      console.error('Authentication/authorization error - not retrying');
-      throw error;
-    }
-
-    // Default: let framework retry
-    return { status: 'retry_requested' };
+    throw error;
   },
 
   /**

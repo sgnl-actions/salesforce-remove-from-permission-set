@@ -19,14 +19,6 @@ inputs:
       min: 15
       max: 18
 
-  apiVersion:
-    type: text
-    description: Salesforce API version to use
-    required: false
-    default: "v61.0"
-    validation:
-      pattern: "^v\\d+\\.\\d+$"
-
   address:
     type: text
     description: Optional Salesforce API base URL override

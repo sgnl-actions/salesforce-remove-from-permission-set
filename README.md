@@ -26,27 +26,37 @@ The action handles the case where no assignment exists gracefully, treating it a
 
 This action supports multiple authentication methods. Configure one of the following:
 
-#### Bearer Token
-- **`BEARER_AUTH_TOKEN`** (secret) - A valid Salesforce OAuth access token
+#### Option 1: Bearer Token
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `BEARER_AUTH_TOKEN` | Secret | Yes | A valid Salesforce OAuth access token |
 
-#### Basic Authentication
-- **`BASIC_USERNAME`** (secret) - Username for basic auth
-- **`BASIC_PASSWORD`** (secret) - Password for basic auth
+#### Option 2: Basic Authentication
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `BASIC_USERNAME` | Secret | Yes | Username for basic auth |
+| `BASIC_PASSWORD` | Secret | Yes | Password for basic auth |
 
-#### OAuth2 Client Credentials
-- **`OAUTH2_CLIENT_CREDENTIALS_CLIENT_ID`** (environment) - OAuth2 client ID
-- **`OAUTH2_CLIENT_CREDENTIALS_CLIENT_SECRET`** (secret) - OAuth2 client secret
-- **`OAUTH2_CLIENT_CREDENTIALS_TOKEN_URL`** (environment) - Token endpoint URL
-- **`OAUTH2_CLIENT_CREDENTIALS_SCOPE`** (environment) - OAuth2 scope (optional)
-- **`OAUTH2_CLIENT_CREDENTIALS_AUDIENCE`** (environment) - OAuth2 audience (optional)
-- **`OAUTH2_CLIENT_CREDENTIALS_AUTH_STYLE`** (environment) - Auth style: `in_header` or `in_body`
+#### Option 3: OAuth2 Client Credentials
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `OAUTH2_CLIENT_CREDENTIALS_CLIENT_SECRET` | Secret | Yes | OAuth2 client secret |
+| `OAUTH2_CLIENT_CREDENTIALS_CLIENT_ID` | Environment | Yes | OAuth2 client ID |
+| `OAUTH2_CLIENT_CREDENTIALS_TOKEN_URL` | Environment | Yes | Token endpoint URL |
+| `OAUTH2_CLIENT_CREDENTIALS_SCOPE` | Environment | No | OAuth2 scope |
+| `OAUTH2_CLIENT_CREDENTIALS_AUDIENCE` | Environment | No | OAuth2 audience |
+| `OAUTH2_CLIENT_CREDENTIALS_AUTH_STYLE` | Environment | No | Auth style: `in_header` or `in_body` |
 
-#### OAuth2 Authorization Code
-- **`OAUTH2_AUTHORIZATION_CODE_ACCESS_TOKEN`** (secret) - OAuth2 access token
+#### Option 4: OAuth2 Authorization Code
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `OAUTH2_AUTHORIZATION_CODE_ACCESS_TOKEN` | Secret | Yes | OAuth2 access token |
 
-### Required Environment Variables
+### Environment Variables
 
-- **`ADDRESS`** - Your Salesforce instance URL (e.g., `https://mycompany.salesforce.com`)
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `ADDRESS` | Yes | Default Salesforce API base URL | `https://mycompany.salesforce.com` |
 
 ### Input Parameters
 
@@ -56,25 +66,17 @@ This action supports multiple authentication methods. Configure one of the follo
 | `permissionSetId` | string | Yes | The 15 or 18-character ID of the permission set |
 | `address` | string | No | Salesforce instance URL (overrides `ADDRESS` environment variable) |
 
-### Output Schema
+### Output Structure
 
-```json
-{
-  "status": "success",
-  "username": "user@example.com",
-  "userId": "005000000000001",
-  "permissionSetId": "0PS000000000001", 
-  "assignmentId": "0PA000000000001",
-  "removed": true
-}
-```
-
-- `status`: Operation result (`success`, `failed`, `halted`)
-- `username`: The username that was processed
-- `userId`: The Salesforce User ID that was found
-- `permissionSetId`: The permission set ID from input
-- `assignmentId`: The assignment ID that was removed (null if no assignment existed)
-- `removed`: Boolean indicating whether an assignment was actually removed
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Operation result (success, failed, halted) |
+| `username` | string | The username that was processed |
+| `userId` | string | The Salesforce User ID that was found |
+| `permissionSetId` | string | The permission set ID from input |
+| `assignmentId` | string | The assignment ID that was removed (null if no assignment existed) |
+| `removed` | boolean | Whether an assignment was actually removed |
+| `address` | string | The Salesforce API base URL used |
 
 ## Usage Examples
 

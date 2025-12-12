@@ -19,23 +19,13 @@ inputs:
       min: 15
       max: 18
 
-  apiVersion:
+  address:
     type: text
-    description: Salesforce API version to use
+    description: Optional Salesforce API base URL override
     required: false
-    default: "v61.0"
     validation:
-      pattern: "^v\\d+\\.\\d+$"
-
-# Required secrets
-secrets:
-  SALESFORCE_ACCESS_TOKEN:
-    description: Salesforce access token for API authentication
-
-# Required environment variables  
-environment:
-  SALESFORCE_INSTANCE_URL:
-    description: The base URL of your Salesforce instance (e.g., https://mycompany.salesforce.com)
+      min: 1
+      max: 100
 
 # Expected output structure
 outputs:
@@ -62,3 +52,7 @@ outputs:
   removed:
     type: boolean
     description: Whether the permission set assignment was actually removed
+
+  address:
+    type: text
+    description: The Salesforce API base URL used

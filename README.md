@@ -66,26 +66,17 @@ This action supports multiple authentication methods. Configure one of the follo
 | `permissionSetId` | string | Yes | The 15 or 18-character ID of the permission set |
 | `address` | string | No | Salesforce instance URL (overrides `ADDRESS` environment variable) |
 
-### Output Schema
+### Output Structure
 
-```json
-{
-  "status": "success",
-  "username": "user@example.com",
-  "userId": "005000000000001",
-  "permissionSetId": "0PS000000000001",
-  "assignmentId": "0PA000000000001",
-  "removed": true,
-  "address": "https://mycompany.salesforce.com"
-}
-```
-
-- `status`: Operation result (`success`, `failed`, `halted`)
-- `username`: The username that was processed
-- `userId`: The Salesforce User ID that was found
-- `permissionSetId`: The permission set ID from input
-- `assignmentId`: The assignment ID that was removed (null if no assignment existed)
-- `removed`: Boolean indicating whether an assignment was actually removed
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Operation result (success, failed, halted) |
+| `username` | string | The username that was processed |
+| `userId` | string | The Salesforce User ID that was found |
+| `permissionSetId` | string | The permission set ID from input |
+| `assignmentId` | string | The assignment ID that was removed (null if no assignment existed) |
+| `removed` | boolean | Whether an assignment was actually removed |
+| `address` | string | The Salesforce API base URL used |
 
 ## Usage Examples
 

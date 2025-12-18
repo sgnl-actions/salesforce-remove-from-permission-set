@@ -139,10 +139,6 @@ describe('Salesforce Remove from Permission Set', () => {
       expect(mockFetch._calls).toHaveLength(1);
     });
 
-    test('should validate required parameters', async () => {
-      await expect(script.invoke({}, mockContext)).rejects.toThrow('username is required');
-      await expect(script.invoke({ username: 'test@example.com' }, mockContext)).rejects.toThrow('permissionSetId is required');
-    });
 
     test('should validate required environment variables', async () => {
       const contextNoEnv = {

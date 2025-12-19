@@ -552,15 +552,6 @@ var script = {
 
     const { username, permissionSetId } = resolvedParams;
 
-    // Validate required parameters
-    if (!username) {
-      throw new Error('username is required');
-    }
-
-    if (!permissionSetId) {
-      throw new Error('permissionSetId is required');
-    }
-
     // Get base URL using utility function
     const baseUrl = getBaseURL(resolvedParams, context);
 
@@ -603,7 +594,8 @@ var script = {
         userId,
         permissionSetId,
         assignmentId: null,
-        removed: false
+        removed: false,
+        address: baseUrl
       };
     }
 
@@ -626,7 +618,8 @@ var script = {
       userId,
       permissionSetId,
       assignmentId,
-      removed: true
+      removed: true,
+      address: baseUrl
     };
   },
 

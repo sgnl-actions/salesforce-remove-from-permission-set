@@ -1,4 +1,5 @@
 import script from '../src/script.mjs';
+import { SGNL_USER_AGENT } from '@sgnl-actions/utils'; 
 
 // Simple fetch mock
 let mockFetch;
@@ -84,6 +85,11 @@ describe('Salesforce Remove from Permission Set', () => {
 
       // Verify API calls
       expect(mockFetch._calls).toHaveLength(3);
+
+      // Verify User-Agent on all calls
+      for (const call of mockFetch._calls) {
+        expect(call[1].headers['User-Agent']).toBe(SGNL_USER_AGENT);
+      }
     });
 
     test('should handle no assignment found (already removed)', async () => {

@@ -9,6 +9,11 @@
  */
 
 /**
+ * User-Agent header value for all SGNL CAEP Hub requests.
+ */
+const SGNL_USER_AGENT = 'SGNL-CAEP-Hub/2.0';
+
+/**
  * Get OAuth2 access token using client credentials flow
  * @param {Object} config - OAuth2 configuration
  * @param {string} config.tokenUrl - Token endpoint URL
@@ -39,7 +44,8 @@ async function getClientCredentialsToken(config) {
 
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'User-Agent': SGNL_USER_AGENT
   };
 
   if (authStyle === 'InParams') {
@@ -158,6 +164,21 @@ function getBaseURL(params, context) {
 }
 
 /**
+ * Create full headers object with Authorization and common headers
+ * @param {Object} context - Execution context with env and secrets
+ * @returns {Promise<Object>} Headers object with Authorization, Accept, Content-Type
+ */
+async function createAuthHeaders(context) {
+  const authHeader = await getAuthorizationHeader(context);
+  return {
+    'Authorization': authHeader,
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': SGNL_USER_AGENT
+  };
+}
+
+/**
  * Salesforce Remove from Permission Set
  *
  * Removes a user from a permission set in Salesforce using a three-step process:
@@ -171,20 +192,17 @@ function getBaseURL(params, context) {
  * Performs a SOQL query to find a user by username
  * @param {string} username - The username to search for
  * @param {string} baseUrl - Salesforce instance URL
- * @param {string} authHeader - Authorization header value (already formatted)
+ * @param {Object} headers - Headers object (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function findUserByUsername(username, baseUrl, authHeader) {
+async function findUserByUsername(username, baseUrl, headers) {
   const encodedUsername = encodeURIComponent(username);
   const query = `SELECT+Id+FROM+User+WHERE+Username='${encodedUsername}'+ORDER+BY+Id+ASC`;
   const url = `${baseUrl}/services/data/v61.0/query?q=${query}`;
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Authorization': authHeader,
-      'Accept': 'application/json'
-    }
+    headers
   });
 
   return response;
@@ -195,19 +213,16 @@ async function findUserByUsername(username, baseUrl, authHeader) {
  * @param {string} userId - The user ID
  * @param {string} permissionSetId - The permission set ID
  * @param {string} baseUrl - Salesforce instance URL
- * @param {string} authHeader - Authorization header value (already formatted)
+ * @param {Object} headers - Headers object (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function findPermissionSetAssignment(userId, permissionSetId, baseUrl, authHeader) {
+async function findPermissionSetAssignment(userId, permissionSetId, baseUrl, headers) {
   const query = `SELECT+Id+FROM+PermissionSetAssignment+WHERE+AssigneeId='${userId}'+AND+PermissionSetId='${permissionSetId}'`;
   const url = `${baseUrl}/services/data/v61.0/query?q=${query}`;
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Authorization': authHeader,
-      'Accept': 'application/json'
-    }
+    headers
   });
 
   return response;
@@ -217,18 +232,15 @@ async function findPermissionSetAssignment(userId, permissionSetId, baseUrl, aut
  * Deletes a permission set assignment
  * @param {string} assignmentId - The assignment ID to delete
  * @param {string} baseUrl - Salesforce instance URL
- * @param {string} authHeader - Authorization header value (already formatted)
+ * @param {Object} headers - Headers object (already formatted)
  * @returns {Promise<Response>} The fetch response
  */
-async function deletePermissionSetAssignment(assignmentId, baseUrl, authHeader) {
+async function deletePermissionSetAssignment(assignmentId, baseUrl, headers) {
   const url = `${baseUrl}/services/data/v61.0/sobjects/PermissionSetAssignment/${assignmentId}`;
 
   const response = await fetch(url, {
     method: 'DELETE',
-    headers: {
-      'Authorization': authHeader,
-      'Accept': 'application/json'
-    }
+    headers
   });
 
   return response;
@@ -268,14 +280,14 @@ var script = {
     // Get base URL using utility function
     const baseUrl = getBaseURL(params, context);
 
-    // Get authorization header
-    const authHeader = await getAuthorizationHeader(context);
+    // Get authorization headers
+    const headers = await createAuthHeaders(context);
 
     console.log(`Removing user ${username} from permission set ${permissionSetId}`);
 
     // Step 1: Find user by username
     console.log(`Step 1: Finding user by username: ${username}`);
-    const userResponse = await findUserByUsername(username, baseUrl, authHeader);
+    const userResponse = await findUserByUsername(username, baseUrl, headers);
 
     if (!userResponse.ok) {
       throw new Error(`Failed to query user: ${userResponse.status} ${userResponse.statusText}`);
@@ -291,7 +303,7 @@ var script = {
 
     // Step 2: Find existing permission set assignment
     console.log(`Step 2: Finding permission set assignment for user ${userId} and permission set ${permissionSetId}`);
-    const assignmentResponse = await findPermissionSetAssignment(userId, permissionSetId, baseUrl, authHeader);
+    const assignmentResponse = await findPermissionSetAssignment(userId, permissionSetId, baseUrl, headers);
 
     if (!assignmentResponse.ok) {
       throw new Error(`Failed to query permission set assignment: ${assignmentResponse.status} ${assignmentResponse.statusText}`);
@@ -317,7 +329,7 @@ var script = {
 
     // Step 3: Delete the permission set assignment
     console.log(`Step 3: Deleting permission set assignment ${assignmentId}`);
-    const deleteResponse = await deletePermissionSetAssignment(assignmentId, baseUrl, authHeader);
+    const deleteResponse = await deletePermissionSetAssignment(assignmentId, baseUrl, headers);
 
     if (!deleteResponse.ok) {
       throw new Error(`Failed to delete permission set assignment: ${deleteResponse.status} ${deleteResponse.statusText}`);

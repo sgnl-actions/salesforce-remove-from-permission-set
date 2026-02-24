@@ -7,7 +7,7 @@
  * 3. Delete the permission set assignment
  */
 
-import { getBaseURL, createAuthHeaders } from '@sgnl-actions/utils';
+import { getBaseURL, createHeaders } from '@sgnl-actions/utils';
 
 /**
  * Performs a SOQL query to find a user by username
@@ -102,7 +102,7 @@ export default {
     const baseUrl = getBaseURL(params, context);
 
     // Get authorization headers
-    const headers = await createAuthHeaders(context);
+    const headers = await createHeaders(context);
 
     console.log(`Removing user ${username} from permission set ${permissionSetId}`);
 

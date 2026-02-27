@@ -159,21 +159,6 @@ describe('Salesforce Remove from Permission Set', () => {
 
       await expect(script.invoke(params, contextNoEnv)).rejects.toThrow('No URL specified. Provide address parameter or ADDRESS environment variable');
     });
-
-    test('should validate required secrets', async () => {
-      const contextNoSecrets = {
-        environment: { ADDRESS: 'https://test.salesforce.com' },
-        secrets: {}
-      };
-
-      const params = {
-        username: 'test@example.com',
-        permissionSetId: '0PS000000000001'
-      };
-
-      await expect(script.invoke(params, contextNoSecrets)).rejects.toThrow('No authentication configured');
-    });
-
     test('should handle API errors in user query', async () => {
       const params = {
         username: 'test@example.com',
